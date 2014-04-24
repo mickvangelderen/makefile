@@ -1,0 +1,96 @@
+#
+# Simple 2-step compilation Makefile by Mick van Gelderen
+#
+# make - builds the target
+# make clean - deletes object files and executable along with the directories if nothing else is contained in them
+# make run - runs the executable
+#
+
+# ------------
+# Config start
+# ------------
+TARGET         := executable
+SOURCE_FOLDER  := sources/
+HEADER_FOLDER  := headers/
+BUILD_FOLDER   := build/
+COMPILER       := gcc
+COMPILER_FLAGS := -Wall -I"headers/"
+LINKER_FLAGS   :=
+# ---------------------
+# End of config section
+# ---------------------
+
+# Allow custom to override the project wide config if necessary.
+-include config.mk
+
+# Strip trailing slashes and automagically trim.
+SOURCE_FOLDER := $(SOURCE_FOLDER:%/=%)
+HEADER_FOLDER := $(HEADER_FOLDER:%/=%)
+BUILD_FOLDER  := $(BUILD_FOLDER:%/=%)
+TARGET_FOLDER := $(TARGET_FOLDER:%/=%)
+
+# Find all files in the source folder ending in .c
+# For shells without find: SOURCE_FILES := $(wildcard $(SOURCE_FOLDER)/*.c)
+SOURCE_FILES := $(shell find $(SOURCE_FOLDER) -iname *.c -type f)
+# Find all files in the includes folder ending in .h
+# For shells without find: HEADER_FILES := $(wildcard $(HEADER_FOLDER)/*.h)
+HEADER_FILES := $(shell find $(HEADER_FOLDER) -iname *.h -type f)
+# Replace the source folder prefix in the source files with the build folder and replace the .c suffix by .o
+OBJECT_FILES := $(SOURCE_FILES:$(SOURCE_FOLDER)/%.c=$(BUILD_FOLDER)/%.o)
+# Obtain the folders in which the object files will reside for easy access.
+OBJECT_FOLDERS := $(sort $(foreach FILE, $(OBJECT_FILES), $(dir $(FILE))))
+# Obtain the target folder for easy access.
+TARGET_FOLDER := $(dir $(TARGET))
+# Make sure target includes a folder so we can execute it with @$(TARGET)
+TARGET := $(TARGET_FOLDER)$(notdir $(TARGET))
+# Get the working directory
+PROJECT_FOLDER := $(shell pwd)
+
+# By default, try to build the target.
+.PHONY: all
+all: $(TARGET)
+
+# The target depends on all object files. We create the directory ourselves because the compiler might not be able/willing to.
+$(TARGET): $(OBJECT_FILES)
+	@mkdir -vp $(dir $@)
+	$(COMPILER) $(LINKER_FLAGS) -o $@ $(OBJECT_FILES)
+
+# Each object file depends on its source file and all header files. We create the directory ourselves because the compiler might not be able/willing to.
+$(BUILD_FOLDER)/%.o: $(SOURCE_FOLDER)/%.c $(HEADER_FILES)
+	@mkdir -vp $(dir $@)
+	$(COMPILER) $(COMPILER_FLAGS) -c $< -o $@
+
+# Remove all object files and the target. Also try to remove emty directories but fail silently.
+# Some notes on rmdir on my system:
+#     rmdir should allow removing . and ./ because it allows absolute paths, subdir/.. and ../thisdir.
+#     rmdir should in my opinion print removed 'directory' when it succeeds instead of the removing message
+#         This is because rmdir -vp build build/sub will print removing build, failed to remove build, removing build/sub, removing build
+#         and there is no easy way to get success messages only.
+#     rmdir should have a -f option where non existing directories are ignored
+.PHONY: clean
+clean:
+	@rm    -vf $(TARGET)         || true
+	@rm    -vf $(OBJECT_FILES)   || true
+	@rmdir -vp $(TARGET_FOLDER)  || true
+	@rmdir -vp $(OBJECT_FOLDERS) || true
+
+# Execute the target.
+.PHONY: run
+run: $(TARGET)
+	@$(TARGET)
+
+# Print some values computed from the config.
+.PHONY: debug
+debug:
+	@echo "Folders:"
+	@echo "  \$$(SOURCE_FOLDER)  = $(SOURCE_FOLDER)"
+	@echo "  \$$(HEADER_FOLDER)  = $(HEADER_FOLDER)"
+	@echo "  \$$(BUILD_FOLDER)   = $(BUILD_FOLDER)"
+	@echo "  \$$(OBJECT_FOLDERS) = $(OBJECT_FOLDERS)"
+	@echo "  \$$(TARGET_FOLDER)  = $(TARGET_FOLDER)"
+	@echo "  \$$(PROJECT_FOLDER) = $(PROJECT_FOLDER)"
+	@echo "Files:"
+	@echo "  \$$(TARGET)         = $(TARGET)"
+	@echo "  \$$(SOURCE_FILES)   = $(SOURCE_FILES)"
+	@echo "  \$$(HEADER_FILES)   = $(HEADER_FILES)"
+	@echo "  \$$(OBJECT_FILES)   = $(OBJECT_FILES)"
